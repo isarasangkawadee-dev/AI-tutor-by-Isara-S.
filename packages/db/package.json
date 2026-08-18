@@ -21,6 +21,6 @@
     "pg": "^8.23.0"
   },
   "devDependencies": {
-    "prisma": "^8.0.0-rc.3"
+    "prisma": "7.10.0-integration-fix-prisma-publish-token.1"
   }
 }
