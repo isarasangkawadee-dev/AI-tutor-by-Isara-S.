@@ -5,7 +5,9 @@ import { execSync } from "node:child_process";
 
 const DATABASE_URL = process.env.DATABASE_URL || "postgresql://localhost/dummy";
 
-if (/^postgresql:\/\/localhost\/dummy(\?|$)/.test(DATABASE_URL)) {
+// Skip for dummy / placeholder / offline database URLs (migrations run
+// after deploy via the container entrypoint, never during the build).
+if (/^postgresql:\/\/localhost\/dummy(\?|$)/.test(DATABASE_URL) || /placeholder/.test(DATABASE_URL)) {
   console.log("[apply-migrations] Skipping — DATABASE_URL is a dummy placeholder.");
   process.exit(0);
 }

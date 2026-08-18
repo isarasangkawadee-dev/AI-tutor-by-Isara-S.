@@ -11,9 +11,10 @@ COPY package.json package-lock.json* ./
 COPY apps/web/package.json ./apps/web/package.json
 COPY packages/core/package.json ./packages/core/package.json
 COPY packages/db/package.json ./packages/db/package.json
-RUN npm ci --workspaces=false
-# The web app needs its own deps too
-RUN cd apps/web && npm ci --omit=dev --workspaces=false
+# Full workspace install — workspace packages like @aitutor/db must have
+# their dependencies (@prisma/client, pg, @prisma/adapter-pg, prisma CLI)
+# installed before `npm run build` runs prisma generate.
+RUN npm ci
 
 # ---------- Stage 2: build ----------
 FROM node:22-alpine AS builder
