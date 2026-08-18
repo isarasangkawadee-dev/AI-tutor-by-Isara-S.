@@ -1,0 +1,1 @@
+deploy: trigger fresh build with corrected start cmd + healthcheck + valid SG region (Railway settings updated)
