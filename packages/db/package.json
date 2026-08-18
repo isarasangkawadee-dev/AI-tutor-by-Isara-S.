@@ -10,9 +10,9 @@
     "./adapter": "./generated/client.js"
   },
   "scripts": {
-    "generate": "DATABASE_URL=${DATABASE_URL:-postgresql://localhost/dummy} node ../../node_modules/prisma/build/index.js generate",
-    "validate": "DATABASE_URL=${DATABASE_URL:-postgresql://localhost/dummy} node ../../node_modules/prisma/build/index.js validate",
-    "migrate:deploy": "DATABASE_URL=${DATABASE_URL:-postgresql://localhost/dummy} node ../../node_modules/prisma/build/index.js migrate deploy",
+    "generate": "cd ../.. && DATABASE_URL=${DATABASE_URL:-postgresql://localhost/dummy} node ./node_modules/prisma/build/index.js generate --config packages/db/prisma.config.ts",
+    "validate": "cd ../.. && DATABASE_URL=${DATABASE_URL:-postgresql://localhost/dummy} node ./node_modules/prisma/build/index.js validate --config packages/db/prisma.config.ts",
+    "migrate:deploy": "cd ../.. && DATABASE_URL=${DATABASE_URL:-postgresql://localhost/dummy} node ./node_modules/prisma/build/index.js migrate deploy --config packages/db/prisma.config.ts",
     "seed": "node prisma/seed.mjs"
   },
   "dependencies": {
