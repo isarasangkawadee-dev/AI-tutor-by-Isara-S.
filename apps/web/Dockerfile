@@ -43,6 +43,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
 USER nextjs
 EXPOSE 3000
+# Runtime platforms (e.g. Railway) inject their own PORT (e.g. 8080),
+# overriding the default 3000. Use shell form so PORT expands at check time.
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=6 \
-  CMD wget -qO- http://localhost:3000/api/v1/health || exit 1
+  CMD wget -qO- "http://localhost:${PORT:-3000}/api/v1/health" || exit 1
 CMD ["node", "apps/web/server.js"]
