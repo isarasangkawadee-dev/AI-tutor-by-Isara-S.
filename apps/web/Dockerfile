@@ -48,3 +48,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=6 \
   CMD wget -qO- "http://localhost:${PORT:-3000}/api/v1/health" || exit 1
 CMD ["node", "apps/web/server.js"]
+# rebuild trigger
