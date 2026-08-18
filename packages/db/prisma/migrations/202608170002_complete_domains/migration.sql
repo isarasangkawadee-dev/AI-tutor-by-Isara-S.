@@ -1,0 +1,83 @@
+CREATE TYPE "MembershipSource" AS ENUM ('REDEEM_CODE','ADMIN_GRANT','COMMERCIAL_SUBSCRIPTION');
+CREATE TYPE "ReportStatus" AS ENUM ('OPEN','REVIEWING','RESOLVED','DISMISSED');
+CREATE TYPE "QuestionLinkVisibility" AS ENUM ('PUBLIC','ENTITLED_USERS','AUTHOR_ONLY');
+CREATE TYPE "LeaderboardVisibility" AS ENUM ('PUBLIC','SCHOOL_ONLY','PRIVATE');
+CREATE TYPE "ChallengeCadence" AS ENUM ('DAILY','WEEKLY');
+CREATE TYPE "ImportItemStatus" AS ENUM ('PARSED','DUPLICATE','INVALID','READY','PUBLISHED','REJECTED');
+CREATE TYPE "TutorRole" AS ENUM ('USER','ASSISTANT','SYSTEM');
+
+ALTER TABLE "User" ADD COLUMN "name" varchar(160), ADD COLUMN "phone" varchar(32), ADD COLUMN "school" varchar(180), ADD COLUMN "grade" integer, ADD COLUMN "avatarUrl" text, ADD COLUMN "emailVerifiedAt" timestamptz;
+ALTER TABLE "User" ADD CONSTRAINT "User_grade_check" CHECK ("grade" IS NULL OR "grade" BETWEEN 1 AND 12);
+CREATE INDEX "User_lastLoginAt_idx" ON "User"("lastLoginAt");
+CREATE INDEX "User_school_grade_idx" ON "User"("school","grade");
+
+ALTER TABLE "Question" ADD COLUMN "topicId" uuid, ADD COLUMN "subtopic" varchar(180), ADD COLUMN "reviewStatus" varchar(32) NOT NULL DEFAULT 'PENDING', ADD COLUMN "sourceMetadata" jsonb, ADD COLUMN "sourceYear" integer, ADD COLUMN "imageUrl" text;
+CREATE INDEX "Question_topic_filter_idx" ON "Question"("topicId","grade","difficulty","status");
+CREATE INDEX "Question_review_idx" ON "Question"("reviewStatus","status");
+
+ALTER TABLE "ExamAttempt" ADD COLUMN "submissionIdempotencyKey" varchar(100), ADD COLUMN "result" jsonb;
+CREATE UNIQUE INDEX "ExamAttempt_submission_key" ON "ExamAttempt"("submissionIdempotencyKey") WHERE "submissionIdempotencyKey" IS NOT NULL;
+ALTER TABLE "ExamAttemptQuestion" ADD COLUMN "choiceOrder" jsonb;
+
+ALTER TABLE "CommunityPost" ADD COLUMN "answerCount" integer NOT NULL DEFAULT 0, ADD COLUMN "commentCount" integer NOT NULL DEFAULT 0, ADD COLUMN "upvoteCount" integer NOT NULL DEFAULT 0, ADD COLUMN "lastActivityAt" timestamptz NOT NULL DEFAULT now(), ADD COLUMN "deletedAt" timestamptz;
+CREATE INDEX "CommunityPost_active_feed_idx" ON "CommunityPost"("board","moderationStatus","lastActivityAt" DESC,"id");
+ALTER TABLE "AuditLog" ADD COLUMN "ipHash" varchar(64), ADD COLUMN "userAgent" varchar(255);
+CREATE INDEX "AuditLog_action_idx" ON "AuditLog"("action","createdAt" DESC);
+ALTER TABLE "ImportJob" ADD COLUMN "objectKey" varchar(512), ADD COLUMN "totalItems" integer NOT NULL DEFAULT 0, ADD COLUMN "processedItems" integer NOT NULL DEFAULT 0, ADD COLUMN "error" text, ADD COLUMN "updatedAt" timestamptz NOT NULL DEFAULT now();
+
+CREATE TABLE "Account" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"userId" uuid NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,"type" varchar(32) NOT NULL,"provider" varchar(80) NOT NULL,"providerAccountId" varchar(191) NOT NULL,"refreshToken" text,"accessToken" text,"expiresAt" integer,"tokenType" varchar(64),"scope" text,"idToken" text,"sessionState" text,UNIQUE("provider","providerAccountId"));
+CREATE INDEX "Account_user_idx" ON "Account"("userId");
+CREATE TABLE "Session" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"sessionToken" varchar(255) UNIQUE NOT NULL,"userId" uuid NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,"expires" timestamptz NOT NULL);
+CREATE INDEX "Session_user_idx" ON "Session"("userId"); CREATE INDEX "Session_expires_idx" ON "Session"("expires");
+CREATE TABLE "VerificationToken" ("identifier" varchar(320) NOT NULL,"token" varchar(255) UNIQUE NOT NULL,"expires" timestamptz NOT NULL,UNIQUE("identifier","token"));
+CREATE TABLE "PasswordResetToken" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"userId" uuid NOT NULL,"tokenHash" varchar(64) UNIQUE NOT NULL,"expiresAt" timestamptz NOT NULL,"usedAt" timestamptz,"createdAt" timestamptz NOT NULL DEFAULT now());
+CREATE INDEX "PasswordResetToken_user_exp_idx" ON "PasswordResetToken"("userId","expiresAt");
+CREATE TABLE "EmailVerificationToken" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"userId" uuid NOT NULL,"tokenHash" varchar(64) UNIQUE NOT NULL,"expiresAt" timestamptz NOT NULL,"usedAt" timestamptz,"createdAt" timestamptz NOT NULL DEFAULT now());
+CREATE INDEX "EmailVerificationToken_user_exp_idx" ON "EmailVerificationToken"("userId","expiresAt");
+CREATE TABLE "SecurityEvent" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"userId" uuid,"type" varchar(80) NOT NULL,"ipHash" varchar(64),"metadata" jsonb,"createdAt" timestamptz NOT NULL DEFAULT now());
+CREATE INDEX "SecurityEvent_user_idx" ON "SecurityEvent"("userId","createdAt"); CREATE INDEX "SecurityEvent_type_idx" ON "SecurityEvent"("type","createdAt");
+CREATE TABLE "RateLimitBucket" ("key" varchar(191) PRIMARY KEY,"count" integer NOT NULL DEFAULT 0,"resetAt" timestamptz NOT NULL,"updatedAt" timestamptz NOT NULL DEFAULT now());
+CREATE INDEX "RateLimitBucket_reset_idx" ON "RateLimitBucket"("resetAt");
+
+CREATE TABLE "Topic" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"subject" "Subject" NOT NULL,"name" varchar(160) NOT NULL,"slug" varchar(180) NOT NULL,"parentId" uuid,"createdAt" timestamptz NOT NULL DEFAULT now(),UNIQUE("subject","slug"));
+CREATE INDEX "Topic_subject_parent_idx" ON "Topic"("subject","parentId");
+CREATE TABLE "Tag" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"name" varchar(100) UNIQUE NOT NULL);
+CREATE TABLE "QuestionTag" ("questionId" uuid NOT NULL REFERENCES "Question"("id") ON DELETE CASCADE,"tagId" uuid NOT NULL REFERENCES "Tag"("id") ON DELETE CASCADE,PRIMARY KEY("questionId","tagId")); CREATE INDEX "QuestionTag_tag_idx" ON "QuestionTag"("tagId","questionId");
+CREATE TABLE "QuestionRevision" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"questionId" uuid NOT NULL REFERENCES "Question"("id") ON DELETE CASCADE,"version" integer NOT NULL,"stem" text NOT NULL,"choices" jsonb NOT NULL,"correctAnswer" jsonb NOT NULL,"explanation" text,"createdAt" timestamptz NOT NULL DEFAULT now(),UNIQUE("questionId","version"));
+CREATE INDEX "QuestionRevision_q_created_idx" ON "QuestionRevision"("questionId","createdAt");
+CREATE TABLE "QuestionStatistics" ("questionId" uuid PRIMARY KEY REFERENCES "Question"("id") ON DELETE CASCADE,"attempts" integer NOT NULL DEFAULT 0,"correct" integer NOT NULL DEFAULT 0,"totalTimeMs" bigint NOT NULL DEFAULT 0,"updatedAt" timestamptz NOT NULL DEFAULT now());
+
+CREATE TABLE "OutboxEvent" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"eventType" varchar(100) NOT NULL,"aggregateType" varchar(80) NOT NULL,"aggregateId" varchar(100) NOT NULL,"idempotencyKey" varchar(191) UNIQUE NOT NULL,"payload" jsonb NOT NULL,"createdAt" timestamptz NOT NULL DEFAULT now(),"publishedAt" timestamptz,"attempts" integer NOT NULL DEFAULT 0,"lastError" text);
+CREATE INDEX "OutboxEvent_pending_idx" ON "OutboxEvent"("publishedAt","createdAt"); CREATE INDEX "OutboxEvent_aggregate_idx" ON "OutboxEvent"("aggregateType","aggregateId");
+
+CREATE TABLE "Achievement" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"code" varchar(80) UNIQUE NOT NULL,"name" varchar(160) NOT NULL,"description" text NOT NULL,"active" boolean NOT NULL DEFAULT true);
+CREATE TABLE "UserAchievement" ("userId" uuid NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,"achievementId" uuid NOT NULL REFERENCES "Achievement"("id") ON DELETE CASCADE,"unlockedAt" timestamptz NOT NULL DEFAULT now(),PRIMARY KEY("userId","achievementId")); CREATE INDEX "UserAchievement_achievement_idx" ON "UserAchievement"("achievementId","unlockedAt");
+CREATE TABLE "ChallengeDefinition" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"code" varchar(80) UNIQUE NOT NULL,"cadence" "ChallengeCadence" NOT NULL,"metric" varchar(80) NOT NULL,"subject" "Subject","target" integer NOT NULL,"rewardPoints" integer NOT NULL,"active" boolean NOT NULL DEFAULT true,CHECK("target">0),CHECK("rewardPoints">=0));
+CREATE TABLE "UserChallengeProgress" ("userId" uuid NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,"challengeId" uuid NOT NULL REFERENCES "ChallengeDefinition"("id") ON DELETE CASCADE,"periodStart" timestamptz NOT NULL,"progress" integer NOT NULL DEFAULT 0,"rewardedAt" timestamptz,PRIMARY KEY("userId","challengeId","periodStart")); CREATE INDEX "UserChallengeProgress_period_idx" ON "UserChallengeProgress"("challengeId","periodStart");
+CREATE TABLE "RewardPreference" ("userId" uuid PRIMARY KEY REFERENCES "User"("id") ON DELETE CASCADE,"soundEnabled" boolean NOT NULL DEFAULT true,"soundVolume" integer NOT NULL DEFAULT 80,"reducedAnimation" boolean NOT NULL DEFAULT false,"leaderboardVisibility" "LeaderboardVisibility" NOT NULL DEFAULT 'PUBLIC',CHECK("soundVolume" BETWEEN 0 AND 100));
+CREATE TABLE "LeaderboardSnapshot" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"period" varchar(16) NOT NULL,"periodStart" timestamptz NOT NULL,"subject" "Subject","school" varchar(180),"grade" integer,"userId" uuid NOT NULL,"points" integer NOT NULL,"rank" integer NOT NULL,"reachedAt" timestamptz NOT NULL,"createdAt" timestamptz NOT NULL DEFAULT now());
+CREATE INDEX "LeaderboardSnapshot_rank_idx" ON "LeaderboardSnapshot"("period","periodStart","subject","school","grade","rank");
+
+CREATE TABLE "MembershipPlan" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"code" varchar(80) UNIQUE NOT NULL,"name" varchar(160) NOT NULL,"active" boolean NOT NULL DEFAULT true,"createdAt" timestamptz NOT NULL DEFAULT now());
+CREATE TABLE "UserMembership" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"userId" uuid NOT NULL REFERENCES "User"("id") ON DELETE RESTRICT,"planId" uuid NOT NULL REFERENCES "MembershipPlan"("id") ON DELETE RESTRICT,"source" "MembershipSource" NOT NULL,"sourceRef" varchar(191),"startsAt" timestamptz NOT NULL,"endsAt" timestamptz NOT NULL,"createdAt" timestamptz NOT NULL DEFAULT now(),CHECK("endsAt">"startsAt"));
+CREATE INDEX "UserMembership_user_idx" ON "UserMembership"("userId","endsAt"); CREATE INDEX "UserMembership_plan_idx" ON "UserMembership"("planId","endsAt"); CREATE INDEX "UserMembership_source_idx" ON "UserMembership"("source","sourceRef");
+
+CREATE TABLE "TutorSession" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"userId" uuid NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,"subject" "Subject","createdAt" timestamptz NOT NULL DEFAULT now(),"updatedAt" timestamptz NOT NULL DEFAULT now()); CREATE INDEX "TutorSession_user_idx" ON "TutorSession"("userId","updatedAt" DESC);
+CREATE TABLE "TutorMessage" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"sessionId" uuid NOT NULL REFERENCES "TutorSession"("id") ON DELETE CASCADE,"role" "TutorRole" NOT NULL,"content" text NOT NULL,"createdAt" timestamptz NOT NULL DEFAULT now()); CREATE INDEX "TutorMessage_session_idx" ON "TutorMessage"("sessionId","createdAt");
+CREATE TABLE "AiTutorUsage" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"requestId" uuid UNIQUE NOT NULL,"userId" uuid NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,"questionId" uuid REFERENCES "Question"("id") ON DELETE SET NULL,"questionVersion" integer,"mode" varchar(40) NOT NULL,"provider" varchar(80) NOT NULL,"model" varchar(120) NOT NULL,"promptVersion" varchar(80) NOT NULL,"inputTokens" integer NOT NULL DEFAULT 0,"outputTokens" integer NOT NULL DEFAULT 0,"estimatedCost" numeric(14,6) NOT NULL DEFAULT 0,"cacheHit" boolean NOT NULL DEFAULT false,"createdAt" timestamptz NOT NULL DEFAULT now());
+CREATE INDEX "AiTutorUsage_user_idx" ON "AiTutorUsage"("userId","createdAt"); CREATE INDEX "AiTutorUsage_provider_idx" ON "AiTutorUsage"("provider","model","createdAt");
+
+CREATE TABLE "CommunityBoard" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"slug" varchar(80) UNIQUE NOT NULL,"name" varchar(120) NOT NULL,"active" boolean NOT NULL DEFAULT true,"sortOrder" integer NOT NULL DEFAULT 0,"createdAt" timestamptz NOT NULL DEFAULT now());
+CREATE TABLE "CommunityAnswer" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"postId" uuid NOT NULL REFERENCES "CommunityPost"("id") ON DELETE CASCADE,"authorId" uuid NOT NULL,"body" text NOT NULL,"moderationStatus" "ModerationStatus" NOT NULL DEFAULT 'VISIBLE',"upvoteCount" integer NOT NULL DEFAULT 0,"deletedAt" timestamptz,"createdAt" timestamptz NOT NULL DEFAULT now(),"updatedAt" timestamptz NOT NULL DEFAULT now()); CREATE INDEX "CommunityAnswer_post_idx" ON "CommunityAnswer"("postId","createdAt"); CREATE INDEX "CommunityAnswer_author_idx" ON "CommunityAnswer"("authorId","createdAt");
+CREATE TABLE "CommunityComment" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"postId" uuid,"answerId" uuid,"authorId" uuid NOT NULL,"body" text NOT NULL,"deletedAt" timestamptz,"createdAt" timestamptz NOT NULL DEFAULT now()); CREATE INDEX "CommunityComment_post_idx" ON "CommunityComment"("postId","createdAt"); CREATE INDEX "CommunityComment_answer_idx" ON "CommunityComment"("answerId","createdAt");
+CREATE TABLE "CommunityReaction" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"userId" uuid NOT NULL,"entityType" varchar(32) NOT NULL,"entityId" uuid NOT NULL,"kind" varchar(24) NOT NULL DEFAULT 'UPVOTE',"createdAt" timestamptz NOT NULL DEFAULT now(),UNIQUE("userId","entityType","entityId","kind")); CREATE INDEX "CommunityReaction_entity_idx" ON "CommunityReaction"("entityType","entityId");
+CREATE TABLE "CommunityBookmark" ("userId" uuid NOT NULL,"postId" uuid NOT NULL,"createdAt" timestamptz NOT NULL DEFAULT now(),PRIMARY KEY("userId","postId")); CREATE INDEX "CommunityBookmark_post_idx" ON "CommunityBookmark"("postId");
+CREATE TABLE "CommunityFollow" ("userId" uuid NOT NULL,"postId" uuid NOT NULL,"createdAt" timestamptz NOT NULL DEFAULT now(),PRIMARY KEY("userId","postId")); CREATE INDEX "CommunityFollow_post_idx" ON "CommunityFollow"("postId");
+CREATE TABLE "CommunityReport" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"reporterId" uuid NOT NULL,"entityType" varchar(32) NOT NULL,"entityId" uuid NOT NULL,"reason" varchar(80) NOT NULL,"status" "ReportStatus" NOT NULL DEFAULT 'OPEN',"createdAt" timestamptz NOT NULL DEFAULT now(),"resolvedAt" timestamptz); CREATE INDEX "CommunityReport_status_idx" ON "CommunityReport"("status","createdAt"); CREATE INDEX "CommunityReport_entity_idx" ON "CommunityReport"("entityType","entityId","status");
+CREATE TABLE "CommunityQuestionLink" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"postId" uuid NOT NULL REFERENCES "CommunityPost"("id") ON DELETE CASCADE,"questionId" uuid NOT NULL,"attemptId" uuid,"visibility" "QuestionLinkVisibility" NOT NULL,"renderedExcerpt" text NOT NULL,"createdAt" timestamptz NOT NULL DEFAULT now()); CREATE INDEX "CommunityQuestionLink_post_idx" ON "CommunityQuestionLink"("postId"); CREATE INDEX "CommunityQuestionLink_question_idx" ON "CommunityQuestionLink"("questionId");
+CREATE TABLE "CommunityNotification" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"userId" uuid NOT NULL,"eventId" uuid UNIQUE NOT NULL,"type" varchar(64) NOT NULL,"payload" jsonb NOT NULL,"readAt" timestamptz,"createdAt" timestamptz NOT NULL DEFAULT now()); CREATE INDEX "CommunityNotification_user_idx" ON "CommunityNotification"("userId","readAt","createdAt" DESC);
+CREATE TABLE "CommunityUserSanction" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"userId" uuid NOT NULL,"type" varchar(40) NOT NULL,"reason" text NOT NULL,"startsAt" timestamptz NOT NULL,"endsAt" timestamptz,"revokedAt" timestamptz,"createdAt" timestamptz NOT NULL DEFAULT now()); CREATE INDEX "CommunityUserSanction_user_idx" ON "CommunityUserSanction"("userId","startsAt");
+CREATE TABLE "CommunityBannedTerm" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"term" varchar(191) UNIQUE NOT NULL,"action" varchar(16) NOT NULL,"active" boolean NOT NULL DEFAULT true,"createdAt" timestamptz NOT NULL DEFAULT now());
+
+CREATE TABLE "TeacherStudentAccess" ("teacherId" uuid NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,"studentId" uuid NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,"active" boolean NOT NULL DEFAULT true,"createdAt" timestamptz NOT NULL DEFAULT now(),PRIMARY KEY("teacherId","studentId")); CREATE INDEX "TeacherStudentAccess_student_idx" ON "TeacherStudentAccess"("studentId","active");
+CREATE TABLE "ImportItem" ("id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),"jobId" uuid NOT NULL REFERENCES "ImportJob"("id") ON DELETE CASCADE,"rowNumber" integer NOT NULL,"status" "ImportItemStatus" NOT NULL DEFAULT 'PARSED',"parsedPayload" jsonb NOT NULL,"validationIssues" jsonb,"duplicateQuestionId" uuid,"duplicateScore" numeric(5,4),"selected" boolean NOT NULL DEFAULT true,"questionId" uuid REFERENCES "Question"("id") ON DELETE SET NULL,"createdAt" timestamptz NOT NULL DEFAULT now(),"updatedAt" timestamptz NOT NULL DEFAULT now(),UNIQUE("jobId","rowNumber")); CREATE INDEX "ImportItem_job_status_idx" ON "ImportItem"("jobId","status"); CREATE INDEX "ImportItem_duplicate_idx" ON "ImportItem"("duplicateQuestionId");

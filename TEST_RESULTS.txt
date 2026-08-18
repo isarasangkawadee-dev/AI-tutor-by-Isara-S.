@@ -1,0 +1,19 @@
+Audit rerun: 2026-08-17
+Command: npm run verify:offline
+Result: PASS
+- Core/integration/security tests: 11 passed, 0 failed
+- Repository contract tests: 4 passed, 0 failed
+- Total executed checks: 15 passed, 0 failed
+
+Additional attempted gate:
+- npm install --package-lock-only --ignore-scripts --no-audit --no-fund: TIMED OUT after 30 seconds (dependency resolution unavailable in runtime)
+
+NOT RUN / NOT PASSABLE LOCALLY:
+- Prisma generate/validate
+- PostgreSQL migrations and DB concurrency tests
+- Next.js production build
+- Auth.js end-to-end session/RBAC tests
+- Playwright/axe/browser E2E
+- Docker Compose health boot
+- k6 load test
+- backup/restore drill

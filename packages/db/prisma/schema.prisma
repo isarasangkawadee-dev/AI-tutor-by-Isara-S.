@@ -1,0 +1,815 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+enum Subject {
+  MATHEMATICS
+  SCIENCE
+  THAI
+  SOCIAL_STUDIES
+  ENGLISH
+}
+enum Difficulty {
+  BASIC
+  INTERMEDIATE
+  ADVANCED
+  COMPETITIVE
+  OLYMPIAD
+}
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SHORT_ANSWER
+  NUMERIC_ANSWER
+}
+enum QuestionStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  ARCHIVED
+  DELETED
+}
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  EXPIRED
+  CANCELLED
+}
+enum RedeemStatus {
+  ACTIVE
+  DISABLED
+}
+enum MembershipSource {
+  REDEEM_CODE
+  ADMIN_GRANT
+  COMMERCIAL_SUBSCRIPTION
+}
+enum ThreadStatus {
+  OPEN
+  LOCKED
+  ARCHIVED
+}
+enum ModerationStatus {
+  VISIBLE
+  PENDING_REVIEW
+  HIDDEN
+  REMOVED
+}
+enum ReportStatus {
+  OPEN
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+enum QuestionLinkVisibility {
+  PUBLIC
+  ENTITLED_USERS
+  AUTHOR_ONLY
+}
+enum LeaderboardVisibility {
+  PUBLIC
+  SCHOOL_ONLY
+  PRIVATE
+}
+enum ChallengeCadence {
+  DAILY
+  WEEKLY
+}
+enum ImportItemStatus {
+  PARSED
+  DUPLICATE
+  INVALID
+  READY
+  PUBLISHED
+  REJECTED
+}
+enum TutorRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+model User {
+  id                    String      @id @default(uuid()) @db.Uuid
+  email                 String      @unique @db.VarChar(320)
+  passwordHash          String?     @db.VarChar(255)
+  name                  String?     @db.VarChar(160)
+  displayName           String?     @db.VarChar(120)
+  phone                 String?     @db.VarChar(32)
+  school                String?     @db.VarChar(180)
+  grade                 Int?
+  avatarUrl             String?     @db.Text
+  role                   UserRole    @default(STUDENT)
+  status                 UserStatus  @default(ACTIVE)
+  points                 Int         @default(0)
+  level                  Int         @default(1)
+  sessionVersion         Int         @default(1)
+  failedLoginCount       Int         @default(0)
+  lockedUntil            DateTime?
+  emailVerifiedAt        DateTime?
+  lastLoginAt            DateTime?
+  subscriptionExpiresAt  DateTime?
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+
+  accounts               Account[]
+  sessions               Session[]
+  attempts               ExamAttempt[]
+  rewards                RewardLedger[]
+  redemptions            RedeemRedemption[]
+  memberships            UserMembership[]
+  posts                   CommunityPost[]
+  auditLogs               AuditLog[] @relation("AuditActor")
+  achievements           UserAchievement[]
+  challengeProgress      UserChallengeProgress[]
+  rewardPreference       RewardPreference?
+  tutorUsage              AiTutorUsage[]
+  tutorSessions           TutorSession[]
+  teacherAssignments     TeacherStudentAccess[] @relation("TeacherAccess")
+  studentAssignments     TeacherStudentAccess[] @relation("StudentAccess")
+
+  @@index([role, status])
+  @@index([createdAt])
+  @@index([lastLoginAt])
+  @@index([school, grade])
+}
+
+model Account {
+  id                String  @id @default(uuid()) @db.Uuid
+  userId            String  @db.Uuid
+  type              String  @db.VarChar(32)
+  provider          String  @db.VarChar(80)
+  providerAccountId String  @db.VarChar(191)
+  refreshToken      String? @db.Text
+  accessToken       String? @db.Text
+  expiresAt         Int?
+  tokenType         String? @db.VarChar(64)
+  scope             String? @db.Text
+  idToken           String? @db.Text
+  sessionState      String? @db.Text
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(uuid()) @db.Uuid
+  sessionToken String   @unique @db.VarChar(255)
+  userId       String   @db.Uuid
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expires])
+}
+
+model VerificationToken {
+  identifier String   @db.VarChar(320)
+  token      String   @unique @db.VarChar(255)
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique @db.VarChar(64)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique @db.VarChar(64)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model SecurityEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @db.Uuid
+  type      String   @db.VarChar(80)
+  ipHash    String?  @db.VarChar(64)
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+}
+
+model RateLimitBucket {
+  key       String   @id @db.VarChar(191)
+  count     Int      @default(0)
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
+}
+
+model Topic {
+  id        String   @id @default(uuid()) @db.Uuid
+  subject   Subject
+  name      String   @db.VarChar(160)
+  slug      String   @db.VarChar(180)
+  parentId  String?  @db.Uuid
+  createdAt DateTime @default(now())
+
+  @@unique([subject, slug])
+  @@index([subject, parentId])
+}
+
+model Tag {
+  id        String        @id @default(uuid()) @db.Uuid
+  name      String        @unique @db.VarChar(100)
+  questions QuestionTag[]
+}
+
+model Question {
+  id            String         @id @default(uuid()) @db.Uuid
+  subject       Subject
+  topicId       String?        @db.Uuid
+  subtopic      String?        @db.VarChar(180)
+  grade         Int
+  difficulty    Difficulty
+  type          QuestionType
+  status        QuestionStatus @default(DRAFT)
+  reviewStatus  String         @default("PENDING") @db.VarChar(32)
+  stem          String         @db.Text
+  explanation   String?        @db.Text
+  correctAnswer Json
+  sourceMetadata Json?
+  sourceYear    Int?
+  imageUrl      String?        @db.Text
+  version       Int            @default(1)
+  authorId      String?        @db.Uuid
+  fingerprint   String         @db.VarChar(64)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  publishedAt   DateTime?
+
+  choices          QuestionChoice[]
+  revisions        QuestionRevision[]
+  tags             QuestionTag[]
+  statistics       QuestionStatistics?
+  attemptQuestions ExamAttemptQuestion[]
+  importItems       ImportItem[]
+  tutorUsage        AiTutorUsage[]
+
+  @@index([subject, grade, difficulty, status])
+  @@index([topicId, grade, difficulty, status])
+  @@index([reviewStatus, status])
+  @@index([status, publishedAt])
+  @@index([fingerprint])
+  @@index([createdAt(sort: Desc), id])
+}
+
+model QuestionChoice {
+  id         String   @id @default(uuid()) @db.Uuid
+  questionId String   @db.Uuid
+  label      String   @db.VarChar(16)
+  content    String   @db.Text
+  isCorrect  Boolean  @default(false)
+  sortOrder  Int
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, sortOrder])
+  @@index([questionId])
+}
+
+model QuestionRevision {
+  id            String   @id @default(uuid()) @db.Uuid
+  questionId    String   @db.Uuid
+  version       Int
+  stem          String   @db.Text
+  choices       Json
+  correctAnswer Json
+  explanation   String?  @db.Text
+  createdAt     DateTime @default(now())
+  question      Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, version])
+  @@index([questionId, createdAt])
+}
+
+model QuestionTag {
+  questionId String @db.Uuid
+  tagId      String @db.Uuid
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  tag        Tag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([questionId, tagId])
+  @@index([tagId, questionId])
+}
+
+model QuestionStatistics {
+  questionId      String   @id @db.Uuid
+  attempts        Int      @default(0)
+  correct         Int      @default(0)
+  totalTimeMs     BigInt   @default(0)
+  updatedAt       DateTime @updatedAt
+  question        Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model ExamAttempt {
+  id                       String        @id @default(uuid()) @db.Uuid
+  userId                   String        @db.Uuid
+  subject                  Subject
+  mode                     String        @db.VarChar(16)
+  status                   AttemptStatus @default(IN_PROGRESS)
+  startedAt                DateTime      @default(now())
+  expiresAt                DateTime?
+  submittedAt              DateTime?
+  submissionIdempotencyKey String?       @unique @db.VarChar(100)
+  score                    Int?
+  maxScore                 Int?
+  percent                  Decimal?      @db.Decimal(5,2)
+  result                   Json?
+  user                     User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  questions                ExamAttemptQuestion[]
+  answers                  AttemptAnswer[]
+
+  @@index([userId, startedAt(sort: Desc)])
+  @@index([userId, status])
+  @@index([status, expiresAt])
+}
+
+model ExamAttemptQuestion {
+  attemptId       String      @db.Uuid
+  questionId      String      @db.Uuid
+  questionVersion Int
+  sortOrder       Int
+  choiceOrder     Json?
+  attempt         ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question        Question    @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@id([attemptId, questionId])
+  @@unique([attemptId, sortOrder])
+  @@index([questionId])
+}
+
+model AttemptAnswer {
+  id             String      @id @default(uuid()) @db.Uuid
+  attemptId      String      @db.Uuid
+  questionId     String      @db.Uuid
+  answer         Json
+  clientRevision Int         @default(0)
+  isCorrect      Boolean?
+  answeredAt     DateTime    @default(now())
+  attempt        ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+  @@index([questionId])
+}
+
+model OutboxEvent {
+  id            String    @id @default(uuid()) @db.Uuid
+  eventType     String    @db.VarChar(100)
+  aggregateType String    @db.VarChar(80)
+  aggregateId   String    @db.VarChar(100)
+  idempotencyKey String   @unique @db.VarChar(191)
+  payload       Json
+  createdAt     DateTime  @default(now())
+  publishedAt   DateTime?
+  attempts      Int       @default(0)
+  lastError     String?   @db.Text
+
+  @@index([publishedAt, createdAt])
+  @@index([aggregateType, aggregateId])
+}
+
+model RewardLedger {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  eventId    String   @unique @db.Uuid
+  sourceType String   @db.VarChar(64)
+  sourceId   String   @db.VarChar(100)
+  reason     String   @db.VarChar(80)
+  points     Int
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sourceType, sourceId, reason])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model Achievement {
+  id          String            @id @default(uuid()) @db.Uuid
+  code        String            @unique @db.VarChar(80)
+  name        String            @db.VarChar(160)
+  description String            @db.Text
+  active      Boolean           @default(true)
+  users       UserAchievement[]
+}
+
+model UserAchievement {
+  userId        String   @db.Uuid
+  achievementId String   @db.Uuid
+  unlockedAt    DateTime @default(now())
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement    Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@id([userId, achievementId])
+  @@index([achievementId, unlockedAt])
+}
+
+model ChallengeDefinition {
+  id           String           @id @default(uuid()) @db.Uuid
+  code         String           @unique @db.VarChar(80)
+  cadence      ChallengeCadence
+  metric       String           @db.VarChar(80)
+  subject      Subject?
+  target       Int
+  rewardPoints Int
+  active       Boolean          @default(true)
+  progress     UserChallengeProgress[]
+}
+
+model UserChallengeProgress {
+  userId      String   @db.Uuid
+  challengeId String   @db.Uuid
+  periodStart DateTime
+  progress    Int      @default(0)
+  rewardedAt  DateTime?
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge   ChallengeDefinition @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@id([userId, challengeId, periodStart])
+  @@index([challengeId, periodStart])
+}
+
+model RewardPreference {
+  userId                String                @id @db.Uuid
+  soundEnabled          Boolean               @default(true)
+  soundVolume           Int                   @default(80)
+  reducedAnimation      Boolean               @default(false)
+  leaderboardVisibility LeaderboardVisibility @default(PUBLIC)
+  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LeaderboardSnapshot {
+  id          String   @id @default(uuid()) @db.Uuid
+  period      String   @db.VarChar(16)
+  periodStart DateTime
+  subject     Subject?
+  school      String?  @db.VarChar(180)
+  grade       Int?
+  userId      String   @db.Uuid
+  points      Int
+  rank        Int
+  reachedAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([period, periodStart, subject, school, grade, userId])
+  @@index([period, periodStart, subject, school, grade, rank])
+}
+
+model MembershipPlan {
+  id           String   @id @default(uuid()) @db.Uuid
+  code         String   @unique @db.VarChar(80)
+  name         String   @db.VarChar(160)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  memberships  UserMembership[]
+}
+
+model UserMembership {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  planId    String           @db.Uuid
+  source    MembershipSource
+  sourceRef String?          @db.VarChar(191)
+  startsAt  DateTime
+  endsAt    DateTime
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  plan      MembershipPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([userId, endsAt])
+  @@index([planId, endsAt])
+  @@index([source, sourceRef])
+}
+
+model RedeemCode {
+  id           String       @id @default(uuid()) @db.Uuid
+  codeHash     String       @unique @db.VarChar(64)
+  status       RedeemStatus @default(ACTIVE)
+  durationDays Int
+  maxUses      Int?
+  useCount     Int          @default(0)
+  perUserLimit Int          @default(1)
+  validFrom    DateTime
+  validUntil   DateTime
+  planCode     String       @db.VarChar(80)
+  redemptions  RedeemRedemption[]
+
+  @@index([status, validUntil])
+}
+
+model RedeemRedemption {
+  id                String     @id @default(uuid()) @db.Uuid
+  codeId            String     @db.Uuid
+  userId            String     @db.Uuid
+  requestId         String     @unique @db.Uuid
+  redeemedAt        DateTime   @default(now())
+  entitlementEndsAt DateTime
+  code              RedeemCode @relation(fields: [codeId], references: [id], onDelete: Restrict)
+  user              User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([codeId, userId])
+  @@index([userId, redeemedAt(sort: Desc)])
+}
+
+model TutorSession {
+  id        String        @id @default(uuid()) @db.Uuid
+  userId    String        @db.Uuid
+  subject   Subject?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  TutorMessage[]
+
+  @@index([userId, updatedAt(sort: Desc)])
+}
+
+model TutorMessage {
+  id        String       @id @default(uuid()) @db.Uuid
+  sessionId String       @db.Uuid
+  role      TutorRole
+  content   String       @db.Text
+  createdAt DateTime     @default(now())
+  session   TutorSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
+model AiTutorUsage {
+  id            String   @id @default(uuid()) @db.Uuid
+  requestId     String   @unique @db.Uuid
+  userId        String   @db.Uuid
+  questionId    String?  @db.Uuid
+  questionVersion Int?
+  mode          String   @db.VarChar(40)
+  provider      String   @db.VarChar(80)
+  model         String   @db.VarChar(120)
+  promptVersion String   @db.VarChar(80)
+  inputTokens   Int      @default(0)
+  outputTokens  Int      @default(0)
+  estimatedCost Decimal  @default(0) @db.Decimal(14,6)
+  cacheHit      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question      Question? @relation(fields: [questionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([provider, model, createdAt])
+}
+
+model CommunityBoard {
+  id        String   @id @default(uuid()) @db.Uuid
+  slug      String   @unique @db.VarChar(80)
+  name      String   @db.VarChar(120)
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model CommunityPost {
+  id               String           @id @default(uuid()) @db.Uuid
+  authorId         String           @db.Uuid
+  board            String           @db.VarChar(80)
+  title            String           @db.VarChar(240)
+  body             String           @db.Text
+  status           ThreadStatus     @default(OPEN)
+  moderationStatus ModerationStatus @default(VISIBLE)
+  pinned           Boolean          @default(false)
+  answerCount      Int              @default(0)
+  commentCount     Int              @default(0)
+  upvoteCount      Int              @default(0)
+  lastActivityAt   DateTime         @default(now())
+  deletedAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  author           User             @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  answers          CommunityAnswer[]
+  questionLinks    CommunityQuestionLink[]
+
+  @@index([board, moderationStatus, lastActivityAt(sort: Desc), id])
+  @@index([authorId, createdAt(sort: Desc)])
+}
+
+model CommunityAnswer {
+  id               String           @id @default(uuid()) @db.Uuid
+  postId           String           @db.Uuid
+  authorId         String           @db.Uuid
+  body             String           @db.Text
+  moderationStatus ModerationStatus @default(VISIBLE)
+  upvoteCount      Int              @default(0)
+  deletedAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  post             CommunityPost    @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model CommunityComment {
+  id        String   @id @default(uuid()) @db.Uuid
+  postId    String?  @db.Uuid
+  answerId  String?  @db.Uuid
+  authorId  String   @db.Uuid
+  body      String   @db.Text
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([postId, createdAt])
+  @@index([answerId, createdAt])
+}
+
+model CommunityReaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  entityType String  @db.VarChar(32)
+  entityId  String   @db.Uuid
+  kind      String   @default("UPVOTE") @db.VarChar(24)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, entityType, entityId, kind])
+  @@index([entityType, entityId])
+}
+
+model CommunityBookmark {
+  userId    String   @db.Uuid
+  postId    String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  @@id([userId, postId])
+  @@index([postId])
+}
+
+model CommunityFollow {
+  userId    String   @db.Uuid
+  postId    String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  @@id([userId, postId])
+  @@index([postId])
+}
+
+model CommunityReport {
+  id         String       @id @default(uuid()) @db.Uuid
+  reporterId String       @db.Uuid
+  entityType String       @db.VarChar(32)
+  entityId   String       @db.Uuid
+  reason     String       @db.VarChar(80)
+  status     ReportStatus @default(OPEN)
+  createdAt  DateTime     @default(now())
+  resolvedAt DateTime?
+
+  @@index([status, createdAt])
+  @@index([entityType, entityId, status])
+}
+
+model CommunityQuestionLink {
+  id              String                 @id @default(uuid()) @db.Uuid
+  postId          String                 @db.Uuid
+  questionId      String                 @db.Uuid
+  attemptId       String?                @db.Uuid
+  visibility      QuestionLinkVisibility
+  renderedExcerpt String                 @db.Text
+  createdAt       DateTime               @default(now())
+  post            CommunityPost          @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([questionId])
+}
+
+model CommunityNotification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  eventId   String    @unique @db.Uuid
+  type      String    @db.VarChar(64)
+  payload   Json
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt, createdAt(sort: Desc)])
+}
+
+model CommunityUserSanction {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  type      String    @db.VarChar(40)
+  reason    String    @db.Text
+  startsAt  DateTime
+  endsAt    DateTime?
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, startsAt])
+}
+
+model CommunityBannedTerm {
+  id        String   @id @default(uuid()) @db.Uuid
+  term      String   @unique @db.VarChar(191)
+  action    String   @db.VarChar(16)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model TeacherStudentAccess {
+  teacherId String   @db.Uuid
+  studentId String   @db.Uuid
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  teacher   User     @relation("TeacherAccess", fields: [teacherId], references: [id], onDelete: Cascade)
+  student   User     @relation("StudentAccess", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([teacherId, studentId])
+  @@index([studentId, active])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  actorId      String?  @db.Uuid
+  action       String   @db.VarChar(120)
+  resourceType String   @db.VarChar(80)
+  resourceId   String?  @db.VarChar(100)
+  requestId    String   @db.VarChar(100)
+  before       Json?
+  after        Json?
+  ipHash       String?  @db.VarChar(64)
+  userAgent    String?  @db.VarChar(255)
+  createdAt    DateTime @default(now())
+  actor        User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([resourceType, resourceId, createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+}
+
+model ImportJob {
+  id                 String       @id @default(uuid()) @db.Uuid
+  filename           String       @db.VarChar(255)
+  mimeType           String       @db.VarChar(120)
+  checksum           String       @db.VarChar(64)
+  copyrightAttested Boolean
+  status             String       @db.VarChar(40)
+  createdById        String       @db.Uuid
+  objectKey          String?      @db.VarChar(512)
+  totalItems         Int          @default(0)
+  processedItems     Int          @default(0)
+  error              String?      @db.Text
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  items              ImportItem[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([checksum])
+}
+
+model ImportItem {
+  id             String           @id @default(uuid()) @db.Uuid
+  jobId          String           @db.Uuid
+  rowNumber      Int
+  status         ImportItemStatus @default(PARSED)
+  parsedPayload  Json
+  validationIssues Json?
+  duplicateQuestionId String?     @db.Uuid
+  duplicateScore Decimal?         @db.Decimal(5,4)
+  selected       Boolean          @default(true)
+  questionId     String?          @db.Uuid
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  job            ImportJob        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  question       Question?        @relation(fields: [questionId], references: [id], onDelete: SetNull)
+
+  @@unique([jobId, rowNumber])
+  @@index([jobId, status])
+  @@index([duplicateQuestionId])
+}

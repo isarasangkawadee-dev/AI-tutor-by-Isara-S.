@@ -1,0 +1,26 @@
+{
+  "name": "@aitutor/db",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "main": "generated/client.js",
+  "types": "generated/client.d.ts",
+  "exports": {
+    ".": "./generated/client.js",
+    "./adapter": "./generated/client.js"
+  },
+  "scripts": {
+    "generate": "prisma generate",
+    "validate": "prisma validate",
+    "migrate:deploy": "prisma migrate deploy",
+    "seed": "node prisma/seed.mjs"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/client": "^7.9.1",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "prisma": "^8.0.0-rc.3"
+  }
+}

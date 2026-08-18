@@ -1,0 +1,34 @@
+{
+  "name": "ai-tutor-production-integration",
+  "private": true,
+  "version": "1.0.0",
+  "packageManager": "npm@10.9.2",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:core": "tsc -p packages/core/tsconfig.json",
+    "test:core": "npm run build:core && node --test packages/core/tests/*.test.js",
+    "typecheck": "tsc -p packages/core/tsconfig.json --noEmit",
+    "test": "npm run test:core && npm run test:repo",
+    "build": "npm run build:core && npm run build -w @aitutor/web",
+    "dev": "npm run dev -w @aitutor/web",
+    "start": "npm run start -w @aitutor/web",
+    "db:generate": "npm exec -w @aitutor/db prisma generate",
+    "db:validate": "npm exec -w @aitutor/db prisma validate",
+    "db:migrate:deploy": "npm exec -w @aitutor/db prisma migrate deploy",
+    "db:seed": "npm run seed -w @aitutor/db",
+    "verify:offline": "npm run typecheck && npm test",
+    "test:security": "npm run test:core -- --test-name-pattern=security",
+    "test:integration": "npm run test:core -- --test-name-pattern=integration",
+    "test:repo": "node --test tests/*.test.mjs"
+  },
+  "overrides": {
+    "lodash": "^4.17.24",
+    "deepmerge-ts": "^8.0.1",
+    "prisma@>=7.10.0-integration-fix-prisma-publish-token.1": {
+      "deepmerge-ts": "^8.0.1"
+    }
+  }
+}
