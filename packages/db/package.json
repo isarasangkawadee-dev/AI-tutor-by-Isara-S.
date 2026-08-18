@@ -10,9 +10,9 @@
     "./adapter": "./generated/client.js"
   },
   "scripts": {
-    "generate": "cd ../.. && DATABASE_URL=${DATABASE_URL:-postgresql://localhost/dummy} node ./node_modules/prisma/build/index.js generate --config packages/db/prisma.config.ts",
-    "validate": "cd ../.. && DATABASE_URL=${DATABASE_URL:-postgresql://localhost/dummy} node ./node_modules/prisma/build/index.js validate --config packages/db/prisma.config.ts",
-    "migrate:deploy": "cd ../.. && DATABASE_URL=${DATABASE_URL:-postgresql://localhost/dummy} node ./node_modules/prisma/build/index.js migrate deploy --config packages/db/prisma.config.ts",
+    "generate": "cd ../.. && DATABASE_URL=${DATABASE_URL:-postgresql://localhost/dummy} node ./node_modules/prisma/build/index.js generate --schema packages/db/prisma/schema.prisma",
+    "validate": "cd ../.. && DATABASE_URL=${DATABASE_URL:-postgresql://localhost/dummy} node ./node_modules/prisma/build/index.js validate --schema packages/db/prisma/schema.prisma",
+    "migrate:deploy": "cd ../.. && DATABASE_URL=${DATABASE_URL:-postgresql://localhost/dummy} node ./node_modules/prisma/build/index.js migrate deploy --schema packages/db/prisma/schema.prisma",
     "seed": "node prisma/seed.mjs"
   },
   "dependencies": {
