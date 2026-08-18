@@ -12,7 +12,7 @@
     "test:core": "npm run build:core && node --test packages/core/tests/*.test.js",
     "typecheck": "tsc -p packages/core/tsconfig.json --noEmit",
     "test": "npm run test:core && npm run test:repo",
-    "build": "npm run build:core && npm run build -w @aitutor/web",
+    "build": "npm run build:core && npm run db:generate && npm run build -w @aitutor/web",
     "dev": "npm run dev -w @aitutor/web",
     "start": "npm run start -w @aitutor/web",
     "db:generate": "npm exec -w @aitutor/db prisma generate",
