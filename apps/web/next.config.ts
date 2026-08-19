@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // Vercel injects VERCEL=1; standalone output breaks Vercel's build tooling
+  // (nft.json lookup), so use the default server output there.
+  output: process.env.VERCEL ? undefined : "standalone",
   poweredByHeader: false,
   async headers() {
     return [{ source: "/(.*)", headers: [
