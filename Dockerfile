@@ -24,6 +24,7 @@ COPY package.json package-lock.json* ./
 COPY apps/web ./apps/web
 COPY packages ./packages
 COPY tsconfig*.json ./
+COPY scripts ./scripts
 ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder" \
     NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
