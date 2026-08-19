@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "build:cf": "next build && node ../../scripts/fix-pg-cloudflare.mjs && npx @opennextjs/cloudflare build"
   },
   "dependencies": {
     "@aitutor/core": "1.0.0",
@@ -17,11 +18,13 @@
     "zod": "4.1.5"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "^1.20.2",
     "@types/node": "22.15.30",
     "@types/react": "19.1.8",
     "@types/react-dom": "19.1.6",
     "eslint": "9.28.0",
     "eslint-config-next": "16.2.12",
-    "typescript": "5.8.3"
+    "typescript": "5.8.3",
+    "wrangler": "^4.124.0"
   }
 }
