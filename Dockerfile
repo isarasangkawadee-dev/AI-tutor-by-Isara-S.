@@ -38,7 +38,6 @@ ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0
 RUN addgroup --system --gid 1001 nodejs \
  && adduser --system --uid 1001 nextjs
-COPY --from=builder /app/apps/web/public ./apps/web/public
 # standalone output includes its own node_modules + workspace packages
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
