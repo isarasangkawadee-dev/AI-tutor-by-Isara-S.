@@ -1,0 +1,5 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build:core && npm run build -w @aitutor/web",
+  "installCommand": "npm ci"
+}
